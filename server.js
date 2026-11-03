@@ -402,8 +402,13 @@ function serveStatic(res, pathname) {
   let rel = decodeURIComponent(pathname);
   if (rel === '/' || rel === '') rel = '/index.html';
   if (rel === '/admin' || rel === '/admin/') rel = '/admin.html';
-  const file = path.join(PUBLIC_DIR, path.normalize(rel).replace(/^([/\\])+/, ''));
-  if (!file.startsWith(PUBLIC_DIR + path.sep)) { send(res, 403, 'forbidden'); return; }
+  const safe = path.normalize(rel).replace(/^([/\\])+/, '');
+  let file = path.join(PUBLIC_DIR, safe);
+  if (!file.startsWith(PUBLIC_DIR + path.sep) || !fs.existsSync(file)) {
+    const flat = path.join(ROOT, safe);
+    file = ((safe === 'index.html' || safe === 'admin.html') && fs.existsSync(flat)) ? flat : '';
+  }
+  if (!file) { send(res, 404, '404 Not Found'); return; }
   fs.readFile(file, (err, data) => {
     if (err) { send(res, 404, '404 Not Found'); return; }
     res.writeHead(200, {
@@ -815,4 +820,5 @@ server.listen(PORT, '0.0.0.0', () => {
 });
 
 module.exports = { server };
+
 
