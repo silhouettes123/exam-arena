@@ -1,0 +1,11 @@
+# Render Blueprint：把仓库连到 Render，可一键创建 Web Service
+services:
+  - type: web
+    name: quiz-arena
+    runtime: node
+    plan: free
+    buildCommand: ""
+    startCommand: node server.js
+    envVars:
+      - key: NODE_VERSION
+        value: "20"

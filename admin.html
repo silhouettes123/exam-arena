@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>抢答星球 · 管理端</title>
+<style>
+  :root{
+    --bg:#070a12; --panel:#10152a; --panel2:#0c1120; --line:rgba(255,255,255,.08);
+    --text:#e9eeff; --muted:#8890ad; --accent:#6c7cff; --accent2:#22e0b8;
+    --gold:#ffc93c; --good:#22c55e; --bad:#ef4444; --warn:#f59e0b;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{font-family:system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;background:var(--bg);color:var(--text);overflow:hidden}
+  button,input,textarea,select{font-family:inherit}
+  .hidden{display:none !important}
+
+  #login{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;padding:20px;
+    background:radial-gradient(circle at 20% 15%, rgba(108,124,255,.2), transparent 45%),
+               radial-gradient(circle at 85% 80%, rgba(34,224,184,.12), transparent 45%), var(--bg)}
+  .login-card{width:min(400px,100%);background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:30px 28px;
+    box-shadow:0 30px 80px rgba(0,0,0,.6)}
+  .login-card h1{font-size:22px;letter-spacing:.06em;margin-bottom:6px}
+  .login-card p{color:var(--muted);font-size:12.5px;line-height:1.7;margin-bottom:20px}
+  .login-card input{width:100%;padding:13px 14px;border-radius:12px;background:rgba(255,255,255,.05);
+    border:1px solid var(--line);color:var(--text);font-size:15px;outline:none}
+  .login-card input:focus{border-color:rgba(108,124,255,.7)}
+  .login-card button{width:100%;margin-top:14px;padding:13px;border-radius:12px;border:none;cursor:pointer;
+    font-size:14px;font-weight:700;color:#08101f;background:linear-gradient(135deg,#8f9bff,#22e0b8)}
+  .login-err{color:#ff8585;font-size:12px;margin-top:10px;min-height:16px}
+
+  #shell{display:flex;height:100%}
+  aside{width:210px;flex:0 0 210px;background:var(--panel2);border-right:1px solid var(--line);
+    display:flex;flex-direction:column;padding:20px 14px}
+  .logo{display:flex;align-items:center;gap:10px;padding:0 6px 20px}
+  .logo i{width:36px;height:36px;border-radius:11px;display:grid;place-items:center;font-style:normal;font-size:17px;
+    background:linear-gradient(135deg,rgba(108,124,255,.4),rgba(34,224,184,.3));border:1px solid rgba(108,124,255,.4)}
+  .logo b{font-size:14px;letter-spacing:.08em}
+  .logo small{display:block;font-size:10px;color:var(--muted);letter-spacing:.14em;margin-top:2px}
+  nav{display:flex;flex-direction:column;gap:4px}
+  nav button{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;border:none;background:none;
+    color:var(--muted);font-size:13.5px;cursor:pointer;text-align:left}
+  nav button:hover{background:rgba(255,255,255,.05);color:var(--text)}
+  nav button.active{background:rgba(108,124,255,.16);color:#cfd4ff}
+  nav button .ic{width:18px;text-align:center}
+  .side-foot{margin-top:auto;display:flex;flex-direction:column;gap:6px;font-size:12px;color:var(--muted)}
+  .side-foot button,.side-foot a{background:none;border:none;color:var(--muted);cursor:pointer;text-align:left;padding:6px 10px;border-radius:8px;font-size:12px;text-decoration:none;display:block}
+  .side-foot button:hover,.side-foot a:hover{background:rgba(255,255,255,.05);color:var(--text)}
+
+  main{flex:1;overflow:auto;padding:24px 26px}
+  .page-head{display:flex;align-items:flex-end;justify-content:space-between;gap:14px;margin-bottom:18px;flex-wrap:wrap}
+  .page-head h2{font-size:20px;letter-spacing:.04em}
+  .page-head p{color:var(--muted);font-size:12.5px;margin-top:5px}
+  .btn{padding:9px 16px;border-radius:10px;border:1px solid var(--line);background:rgba(255,255,255,.05);
+    color:var(--text);font-size:13px;cursor:pointer;white-space:nowrap}
+  .btn:hover{background:rgba(255,255,255,.1)}
+  .btn.primary{background:linear-gradient(135deg,#7c8cff,#4f9dff);border-color:transparent;color:#fff;font-weight:700}
+  .btn.good{background:rgba(34,197,94,.16);border-color:rgba(34,197,94,.45);color:#b8ffd6}
+  .btn.warn{background:rgba(245,158,11,.14);border-color:rgba(245,158,11,.4);color:#ffe0a8}
+  .btn.bad{background:rgba(239,68,68,.14);border-color:rgba(239,68,68,.4);color:#ffc0c0}
+  .btn:disabled{opacity:.45;cursor:not-allowed}
+  .btn.sm{padding:6px 11px;font-size:12px;border-radius:8px}
+
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:18px}
+  .stat{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px}
+  .stat .k{font-size:11px;letter-spacing:.16em;color:var(--muted)}
+  .stat .v{font-size:26px;font-weight:800;margin-top:8px}
+  .stat .v small{font-size:12px;font-weight:500;color:var(--muted);margin-left:4px}
+
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:18px}
+  .panel + .panel{margin-top:14px}
+  .panel h3{font-size:13px;letter-spacing:.1em;color:#c3c9e8;margin-bottom:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th{text-align:left;font-size:11px;letter-spacing:.12em;color:var(--muted);font-weight:600;padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+  td{padding:10px;border-bottom:1px solid rgba(255,255,255,.045);vertical-align:middle}
+  tr:last-child td{border-bottom:none}
+  td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+  .qtext-cell{max-width:380px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .tag{display:inline-block;padding:2px 8px;border-radius:6px;font-size:11px;letter-spacing:.06em;white-space:nowrap}
+  .tag.gray{background:rgba(255,255,255,.07);color:#b6bdd8}
+  .tag.green{background:rgba(34,197,94,.15);color:#8ff0b8}
+  .tag.blue{background:rgba(108,124,255,.18);color:#b9c1ff}
+  .tag.amber{background:rgba(245,158,11,.15);color:#ffd899}
+  .tag.red{background:rgba(239,68,68,.15);color:#ffb3b3}
+  .empty{padding:30px 10px;text-align:center;color:var(--muted);font-size:13px;line-height:1.9}
+
+  .mask{position:fixed;inset:0;background:rgba(4,6,12,.7);backdrop-filter:blur(4px);display:flex;
+    align-items:center;justify-content:center;padding:20px;z-index:50}
+  .modal{width:min(600px,100%);max-height:88vh;overflow:auto;background:var(--panel);border:1px solid var(--line);
+    border-radius:18px;padding:22px}
+  .modal h3{font-size:16px;margin-bottom:16px}
+  .modal .row{margin-bottom:13px}
+  .modal label{display:block;font-size:11px;letter-spacing:.1em;color:var(--muted);margin-bottom:6px}
+  .modal input[type=text],.modal input[type=number],.modal textarea,.modal select{
+    width:100%;padding:10px 12px;border-radius:10px;background:rgba(255,255,255,.05);
+    border:1px solid var(--line);color:var(--text);font-size:14px;outline:none}
+  .modal textarea{resize:vertical;min-height:60px}
+  .modal input:focus,.modal textarea:focus{border-color:rgba(108,124,255,.6)}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .optline{display:flex;align-items:center;gap:9px;margin-bottom:8px}
+  .optline input[type=radio]{accent-color:#6c7cff;width:16px;height:16px;flex:0 0 auto}
+  .optline input[type=text]{flex:1}
+  .qpick{max-height:230px;overflow:auto;border:1px solid var(--line);border-radius:12px;padding:6px}
+  .qpick label{display:flex;align-items:center;gap:9px;padding:7px 9px;border-radius:8px;font-size:13px;color:#c8cfe8;cursor:pointer;margin:0}
+  .qpick label:hover{background:rgba(255,255,255,.04)}
+  .qpick input{accent-color:#6c7cff;flex:0 0 auto}
+  .checkline{display:flex;align-items:center;gap:9px;font-size:13px;color:#c8cfe8;cursor:pointer;margin-top:9px}
+  .checkline input{accent-color:#6c7cff;width:16px;height:16px}
+  .modal-foot{display:flex;justify-content:flex-end;gap:10px;margin-top:18px}
+  .modal-err{color:#ff8585;font-size:12px;min-height:16px;margin-top:6px}
+
+  .rt{border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:12px;background:rgba(255,255,255,.02)}
+  .rt-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+  .rt-head b{font-size:15px}
+  .rt-head .tm{font-variant-numeric:tabular-nums;font-weight:800;color:#cfd4ff;background:rgba(108,124,255,.16);padding:3px 9px;border-radius:8px;font-size:13px}
+  .rt-head .sp{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
+  .bar{height:7px;border-radius:4px;background:rgba(255,255,255,.08);overflow:hidden;min-width:60px}
+  .bar i{display:block;height:100%;background:linear-gradient(90deg,#22e0b8,#6c7cff)}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--accent2);box-shadow:0 0 10px var(--accent2);animation:blink 1.4s infinite}
+  @keyframes blink{50%{opacity:.25}}
+
+  @media (max-width:860px){
+    aside{width:64px;flex:0 0 64px;padding:16px 8px}
+    .logo b,.logo small,nav button span.lbl,.side-foot span{display:none}
+    nav button{justify-content:center;padding:11px 0}
+    main{padding:18px 14px}
+    .qtext-cell{max-width:170px}
+  }
+</style>
+</head>
+<body>
+
+<div id="login">
+  <div class="login-card">
+    <h1>管理端登录</h1>
+    <p>抢答星球 · 出题、发布考试、实时监控与成绩统计</p>
+    <input id="loginPass" type="password" placeholder="管理密码" autocomplete="current-password">
+    <button id="loginBtn">登录</button>
+    <p class="login-err" id="loginErr"></p>
+    <p style="font-size:11px;color:#5a6384;margin-top:14px">默认密码 admin123，登录后可在「设置」修改</p>
+  </div>
+</div>
+
+<div id="shell" class="hidden">
+  <aside>
+    <div class="logo"><i>⚡</i><div><b>抢答星球</b><small>ADMIN</small></div></div>
+    <nav>
+      <button data-tab="overview" class="active"><span class="ic">▤</span><span class="lbl">概览</span></button>
+      <button data-tab="questions"><span class="ic">✎</span><span class="lbl">题库</span></button>
+      <button data-tab="exams"><span class="ic">◈</span><span class="lbl">考试</span></button>
+      <button data-tab="live"><span class="ic">◉</span><span class="lbl">实时监控</span></button>
+      <button data-tab="stats"><span class="ic">▲</span><span class="lbl">成绩统计</span></button>
+      <button data-tab="settings"><span class="ic">⚙</span><span class="lbl">设置</span></button>
+    </nav>
+    <div class="side-foot">
+      <a href="/" target="_blank">↗ 打开用户端</a>
+      <button id="logoutBtn"><span>退出登录</span></button>
+    </div>
+  </aside>
+  <main id="main"></main>
+</div>
+
+<script>
+(function(){
+'use strict';
+var $ = function(id){ return document.getElementById(id); };
+var data = null;
+var tab = 'overview';
+var statsExamId = null;
+
+function api(path, opts){
+  return fetch(path, Object.assign({ credentials:'same-origin' }, opts || {})).then(function(r){
+    if (r.status === 401){ showLogin(); throw new Error('未登录'); }
+    return r.json().catch(function(){ return {}; }).then(function(j){
+      if (!r.ok) throw new Error(j.error || ('请求失败 ' + r.status));
+      return j;
+    });
+  });
+}
+function post(path, body){
+  return api(path, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body || {}) });
+}
+
+function showLogin(){ $('login').classList.remove('hidden'); $('shell').classList.add('hidden'); }
+function showApp(){ $('login').classList.add('hidden'); $('shell').classList.remove('hidden'); }
+
+function doLogin(){
+  var pwd = $('loginPass').value;
+  $('loginErr').textContent = '';
+  post('/api/admin/login', { password: pwd }).then(function(){
+    $('loginPass').value = '';
+    showApp();
+    load();
+  }).catch(function(e){ $('loginErr').textContent = e.message; });
+}
+$('loginBtn').addEventListener('click', doLogin);
+$('loginPass').addEventListener('keydown', function(e){ if (e.key === 'Enter') doLogin(); });
+$('logoutBtn').addEventListener('click', function(){ post('/api/admin/logout').then(showLogin); });
+
+function load(){
+  return api('/api/admin/overview').then(function(d){ data = d; render(); }).catch(function(){});
+}
+
+document.querySelectorAll('nav button').forEach(function(b){
+  b.addEventListener('click', function(){
+    document.querySelectorAll('nav button').forEach(function(x){ x.classList.remove('active'); });
+    b.classList.add('active');
+    tab = b.getAttribute('data-tab');
+    render();
+  });
+});
+
+setInterval(function(){
+  if (!data || $('shell').classList.contains('hidden')) return;
+  if (tab === 'overview' || tab === 'live') load();
+}, 2000);
+
+/* ---------------- 通用 ---------------- */
+function esc(s){
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+  });
+}
+function statusTag(status){
+  if (status === 'live') return '<span class="tag green">进行中</span>';
+  if (status === 'lobby') return '<span class="tag amber">大厅等待</span>';
+  if (status === 'ended') return '<span class="tag blue">已结束</span>';
+  return '<span class="tag gray">草稿</span>';
+}
+function fmtLeft(ms){
+  if (ms <= 0) return '00:00';
+  var s = Math.floor(ms / 1000), m = Math.floor(s / 60), ss = s % 60;
+  return (m < 10 ? '0' : '') + m + ':' + (ss < 10 ? '0' : '') + ss;
+}
+function runtimeOf(examId){
+  return (data.runtimes || []).find(function(r){ return r.examId === examId; }) || null;
+}
+
+function render(){
+  if (!data) return;
+  if (tab === 'overview') renderOverview();
+  else if (tab === 'questions') renderQuestions();
+  else if (tab === 'exams') renderExams();
+  else if (tab === 'live') renderLive();
+  else if (tab === 'stats') renderStats();
+  else if (tab === 'settings') renderSettings();
+}
+
+/* ---------------- 概览 ---------------- */
+function renderOverview(){
+  var active = (data.runtimes || []).filter(function(r){ return r.phase !== 'ended'; });
+  var totalPlayers = (data.runtimes || []).reduce(function(a, r){ return a + r.players.length; }, 0);
+
+  $('main').innerHTML =
+    '<div class="page-head"><div><h2>概览</h2><p>可以同时开多场考试，互不干扰</p></div>' +
+      '<button class="btn primary" onclick="window.__newExam()">+ 新建考试</button></div>' +
+    '<div class="cards">' +
+      '<div class="stat"><div class="k">题库</div><div class="v">' + data.questions.length + '<small>题</small></div></div>' +
+      '<div class="stat"><div class="k">考试场次</div><div class="v">' + data.exams.length + '<small>场</small></div></div>' +
+      '<div class="stat"><div class="k">进行中</div><div class="v">' + active.length + '<small>场</small></div></div>' +
+      '<div class="stat"><div class="k">在线考生</div><div class="v">' + totalPlayers + '<small>人</small></div></div>' +
+    '</div>' +
+    ((data.runtimes || []).length ? (data.runtimes).map(function(r){
+      return '<div class="panel"><h3>' + esc(r.title) + statusTag(r.phase) +
+        '<span style="color:#8890ad;font-size:12px;font-weight:400">' + r.players.length + ' 人 · 平均已答 ' + r.avgAnswered + '/' + r.total + '</span>' +
+        '<button class="btn sm" style="margin-left:auto" onclick="window.__gotoLive()">监控</button></h3></div>';
+    }).join('') : '<div class="panel"><div class="empty">还没有进行中的考试<br><span style="font-size:12px;color:#5a6384">去「考试」页发布一场</span></div></div>');
+}
+
+/* ---------------- 题库 ---------------- */
+function renderQuestions(){
+  var rows = data.questions.map(function(q){
+    return '<tr><td class="qtext-cell" title="' + esc(q.text) + '">' + esc(q.text) + '</td>' +
+      '<td><span class="tag gray">' + esc(q.cat) + '</span></td>' +
+      '<td class="num">' + q.score + '</td>' +
+      '<td class="num" style="color:#22e0b8">' + 'ABCD'[q.correct] + '</td>' +
+      '<td style="text-align:right;white-space:nowrap">' +
+        '<button class="btn sm" onclick="window.__editQ(\'' + q.id + '\')">编辑</button> ' +
+        '<button class="btn sm bad" onclick="window.__delQ(\'' + q.id + '\')">删除</button></td></tr>';
+  }).join('');
+
+  $('main').innerHTML =
+    '<div class="page-head"><div><h2>题库</h2><p>共 ' + data.questions.length + ' 题，每题可单独设分值</p></div>' +
+      '<button class="btn primary" onclick="window.__newQ()">+ 新增题目</button></div>' +
+    '<div class="panel">' + (data.questions.length ?
+      '<table><thead><tr><th>题干</th><th>分类</th><th class="num">分值</th><th class="num">答案</th><th></th></tr></thead><tbody>' + rows + '</tbody></table>'
+      : '<div class="empty">题库还是空的</div>') + '</div>';
+}
+
+/* ---------------- 考试 ---------------- */
+function renderExams(){
+  var items = data.exams.map(function(e){
+    var rt = runtimeOf(e.id);
+    var btns = '';
+    if (!rt || rt.phase === 'lobby'){
+      if (!rt) btns += '<button class="btn sm good" onclick="window.__act(\'publish\',\'' + e.id + '\')">发布</button> ';
+      if (rt) btns += '<button class="btn sm good" onclick="window.__act(\'start\',\'' + e.id + '\')">开始答题</button> ';
+      if (!rt) btns += '<button class="btn sm" onclick="window.__editE(\'' + e.id + '\')">编辑</button> ';
+      if (!rt) btns += '<button class="btn sm bad" onclick="window.__delE(\'' + e.id + '\')">删除</button>';
+    } else if (rt.phase === 'live'){
+      btns += '<button class="btn sm warn" onclick="window.__act(\'end\',\'' + e.id + '\')">结束考试</button>';
+    } else {
+      btns += '<button class="btn sm" onclick="window.__act(\'reset\',\'' + e.id + '\')">重置为草稿</button> ';
+      btns += '<button class="btn sm bad" onclick="window.__delE(\'' + e.id + '\')">删除</button>';
+    }
+    var flags = [];
+    if (e.shuffleQuestions) flags.push('题目乱序');
+    if (e.shuffleOptions) flags.push('选项乱序');
+    if (e.maxSwitch > 0) flags.push('切屏 ' + e.maxSwitch + ' 次交卷');
+    if (e.endWhenAllSubmitted) flags.push('全交自动结束');
+
+    return '<div class="panel"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">' +
+      '<b style="font-size:15px">' + esc(e.title) + '</b>' + statusTag(e.status) +
+      '<span style="color:#8890ad;font-size:12px">' + e.count + ' 题 · ' + e.durationMinutes + ' 分钟' +
+      (flags.length ? ' · ' + flags.join(' · ') : '') + '</span>' +
+      '<span style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap">' + btns + '</span></div></div>';
+  }).join('');
+
+  $('main').innerHTML =
+    '<div class="page-head"><div><h2>考试</h2><p>发布后学生可进入；点击开始后整场倒计时</p></div>' +
+      '<button class="btn primary" onclick="window.__newExam()">+ 新建考试</button></div>' +
+    (items || '<div class="panel"><div class="empty">还没有考试</div></div>');
+}
+
+/* ---------------- 实时监控 ---------------- */
+function renderLive(){
+  var list = data.runtimes || [];
+  if (!list.length){
+    $('main').innerHTML = '<div class="page-head"><div><h2>实时监控</h2><p>发布考试后这里显示每场考试的进度</p></div></div>' +
+      '<div class="panel"><div class="empty">当前没有进行中的考试</div></div>';
+    return;
+  }
+
+  var html = list.map(function(r){
+    var phaseName = {lobby:'大厅等待', live:'考试中', ended:'已结束'}[r.phase] || r.phase;
+    var left = r.deadline ? Math.max(0, r.deadline - r.serverNow) : 0;
+    var controls = '';
+    if (r.phase === 'lobby') controls = '<button class="btn sm good" onclick="window.__act(\'start\',\'' + r.examId + '\')">开始答题</button> <button class="btn sm bad" onclick="window.__act(\'end\',\'' + r.examId + '\')">结束</button>';
+    else if (r.phase === 'live') controls = '<button class="btn sm warn" onclick="window.__act(\'end\',\'' + r.examId + '\')">结束考试</button>';
+    else controls = '<button class="btn sm" onclick="window.__act(\'reset\',\'' + r.examId + '\')">重置</button>';
+
+    var rows = r.players.map(function(p, i){
+      return '<tr><td class="num">' + (i + 1) + '</td><td>' + esc(p.name) +
+        (p.connected ? '' : ' <span class="tag gray">离线</span>') +
+        (p.forced ? ' <span class="tag red">强制交卷</span>' : '') + '</td>' +
+        '<td class="num">' + p.answered + '/' + p.total + '</td>' +
+        '<td class="num">' + (p.submitted ? '已交' : '—') + '</td>' +
+        '<td class="num">' + p.switchCount + '</td>' +
+        '<td class="num">' + (p.score == null ? '—' : p.score) + '</td></tr>';
+    }).join('');
+
+    return '<div class="rt"><div class="rt-head">' +
+      (r.phase === 'live' ? '<span class="dot"></span>' : '') +
+      '<b>' + esc(r.title) + '</b>' + statusTag(r.phase) +
+      (r.phase === 'live' ? '<span class="tm" data-deadline="' + r.deadline + '">' + fmtLeft(left) + '</span>' : '') +
+      '<span style="color:#8890ad;font-size:12px">' + r.players.length + ' 人 · 已交 ' + r.submittedCount + '</span>' +
+      '<span class="sp">' + controls + '</span></div>' +
+      (r.players.length ? '<table><thead><tr><th class="num">#</th><th>考生</th><th class="num">已答</th><th class="num">交卷</th><th class="num">切屏</th><th class="num">得分</th></tr></thead><tbody>' + rows + '</tbody></table>'
+        : '<div class="empty">还没有人进入</div>') + '</div>';
+  }).join('');
+
+  $('main').innerHTML = '<div class="page-head"><div><h2>实时监控</h2><p>倒计时、答题进度、切屏次数、交卷状态</p></div></div>' + html;
+  tickClocks();
+}
+
+function tickClocks(){
+  [].forEach.call(document.querySelectorAll('[data-deadline]'), function(el){
+    var d = Number(el.getAttribute('data-deadline'));
+    if (d) el.textContent = fmtLeft(d - Date.now());
+  });
+}
+setInterval(tickClocks, 1000);
+
+/* ---------------- 统计 ---------------- */
+function renderStats(){
+  var finished = data.exams.filter(function(e){ return e.results && e.results.length; });
+  var options = finished.map(function(e){
+    return '<option value="' + e.id + '"' + (statsExamId === e.id ? ' selected' : '') + '>' + esc(e.title) + '（' + e.results.length + ' 人）</option>';
+  }).join('');
+  var exam = finished.find(function(e){ return e.id === statsExamId; }) || finished[0];
+  statsExamId = exam ? exam.id : null;
+
+  var body = '';
+  if (!exam){
+    body = '<div class="empty">还没有已结束的考试<br><span style="font-size:12px;color:#5a6384">考完并结束后，成绩会出现在这里</span></div>';
+  } else {
+    var rows = exam.results.map(function(r){
+      return '<tr><td class="num">' + r.rank + '</td><td>' + esc(r.name) + '</td>' +
+        '<td class="num"><b>' + r.score + '</b></td><td class="num">' + r.correctCount + '</td>' +
+        '<td class="num">' + (r.totalMs / 1000).toFixed(0) + 's</td></tr>';
+    }).join('');
+    var qrows = (exam.questionStats || []).map(function(s){
+      return '<tr><td class="num">' + (s.index + 1) + '</td><td class="qtext-cell">' + esc(s.text) + '</td>' +
+        '<td class="num">' + s.answered + '</td><td class="num">' + s.correct + '</td>' +
+        '<td style="width:130px"><div style="display:flex;align-items:center;gap:8px">' +
+        '<div class="bar" style="flex:1"><i style="width:' + s.accuracy + '%"></i></div>' +
+        '<span class="num" style="width:38px;text-align:right">' + s.accuracy + '%</span></div></td></tr>';
+    }).join('');
+    var avg = exam.results.reduce(function(a, r){ return a + r.score; }, 0) / exam.results.length;
+
+    body = '<div class="cards">' +
+      '<div class="stat"><div class="k">参考人数</div><div class="v">' + exam.results.length + '<small>人</small></div></div>' +
+      '<div class="stat"><div class="k">平均分</div><div class="v">' + avg.toFixed(1) + '</div></div>' +
+      '<div class="stat"><div class="k">最高分</div><div class="v">' + exam.results[0].score + '</div></div>' +
+      '<div class="stat"><div class="k">题目数</div><div class="v">' + exam.count + '</div></div></div>' +
+      '<div class="panel"><h3>排行榜</h3><table><thead><tr><th class="num">名次</th><th>昵称</th><th class="num">总分</th><th class="num">答对</th><th class="num">用时</th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
+      '<div class="panel"><h3>每题正确率</h3><table><thead><tr><th class="num">#</th><th>题目</th><th class="num">作答</th><th class="num">答对</th><th>正确率</th></tr></thead><tbody>' + qrows + '</tbody></table></div>';
+  }
+
+  $('main').innerHTML =
+    '<div class="page-head"><div><h2>成绩统计</h2><p>排行榜与每题正确率，可导出 CSV</p></div>' +
+      '<div style="display:flex;gap:8px;align-items:center">' +
+      (finished.length ? '<select id="statsSel" style="padding:9px 12px;border-radius:10px;background:#171c31;border:1px solid rgba(255,255,255,.1);color:#e9eeff">' + options + '</select>' +
+        '<button class="btn" onclick="window.__export()">导出 CSV</button>' : '') +
+      '</div></div>' + body;
+
+  if ($('statsSel')) $('statsSel').addEventListener('change', function(){ statsExamId = $('statsSel').value; renderStats(); });
+}
+
+/* ---------------- 设置 ---------------- */
+function renderSettings(){
+  $('main').innerHTML =
+    '<div class="page-head"><div><h2>设置</h2><p>修改管理密码</p></div></div>' +
+    '<div class="panel" style="max-width:460px"><h3>修改密码</h3>' +
+      '<div class="row" style="margin-bottom:12px"><label>原密码</label><input id="oldPass" type="password" style="width:100%;padding:10px 12px;border-radius:10px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:#fff"></div>' +
+      '<div class="row" style="margin-bottom:12px"><label>新密码（至少 4 位）</label><input id="newPass" type="password" style="width:100%;padding:10px 12px;border-radius:10px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:#fff"></div>' +
+      '<button class="btn primary" onclick="window.__savePass()">保存</button>' +
+      '<p id="passMsg" style="font-size:12px;margin-top:10px;min-height:16px;color:#8ff0b8"></p></div>';
+}
+
+/* ---------------- 弹窗 ---------------- */
+function closeModal(){ var m = document.querySelector('.mask'); if (m) m.remove(); }
+function openModal(html){
+  closeModal();
+  var mask = document.createElement('div');
+  mask.className = 'mask';
+  mask.innerHTML = '<div class="modal">' + html + '</div>';
+  mask.addEventListener('click', function(e){ if (e.target === mask) closeModal(); });
+  document.body.appendChild(mask);
+}
+
+/* ---------------- 题目 ---------------- */
+window.__newQ = function(){ questionModal(null); };
+window.__editQ = function(id){ questionModal(data.questions.find(function(q){ return q.id === id; })); };
+window.__closeModal = closeModal;
+
+function questionModal(q){
+  var isNew = !q;
+  q = q || { cat:'常识', text:'', options:['','','',''], correct:0, score:10, explain:'' };
+  var opts = q.options.map(function(o, i){
+    return '<div class="optline"><input type="radio" name="correct" value="' + i + '"' + (q.correct === i ? ' checked' : '') + '>' +
+      '<input type="text" id="opt' + i + '" value="' + esc(o) + '" placeholder="选项 ' + 'ABCD'[i] + '"></div>';
+  }).join('');
+
+  openModal('<h3>' + (isNew ? '新增题目' : '编辑题目') + '</h3>' +
+    '<div class="row"><label>分类</label><input type="text" id="qCat" value="' + esc(q.cat) + '" placeholder="例如：常识 / 语文 / 公司制度"></div>' +
+    '<div class="row"><label>题干</label><textarea id="qText" placeholder="输入题目内容">' + esc(q.text) + '</textarea></div>' +
+    '<div class="row"><label>选项（左侧单选为正确答案）</label>' + opts + '</div>' +
+    '<div class="row" style="max-width:180px"><label>分值</label><input type="number" id="qScore" value="' + q.score + '" min="1" max="100"></div>' +
+    '<div class="row"><label>解析（选填，考后展示）</label><textarea id="qExplain" placeholder="为什么选这个答案">' + esc(q.explain || '') + '</textarea></div>' +
+    '<p class="modal-err" id="qErr"></p>' +
+    '<div class="modal-foot"><button class="btn" onclick="window.__closeModal()">取消</button>' +
+    '<button class="btn primary" id="qSave">保存</button></div>');
+
+  $('qSave').addEventListener('click', function(){
+    var options = [0,1,2,3].map(function(i){ return $('opt' + i).value.trim(); });
+    var checked = document.querySelector('input[name=correct]:checked');
+    var body = {
+      id: q.id || undefined,
+      cat: $('qCat').value.trim(),
+      text: $('qText').value.trim(),
+      options: options,
+      correct: checked ? Number(checked.value) : -1,
+      score: Number($('qScore').value),
+      explain: $('qExplain').value.trim()
+    };
+    if (!body.text){ $('qErr').textContent = '题干不能为空'; return; }
+    if (options.some(function(o){ return !o; })){ $('qErr').textContent = '四个选项都要填写'; return; }
+    if (body.correct < 0){ $('qErr').textContent = '请选择正确答案'; return; }
+    post('/api/admin/question', body).then(function(d){ data = d; closeModal(); render(); })
+      .catch(function(e){ $('qErr').textContent = e.message; });
+  });
+}
+
+window.__delQ = function(id){
+  if (!confirm('确定删除这道题？')) return;
+  api('/api/admin/question?id=' + encodeURIComponent(id), { method:'DELETE' }).then(function(d){ data = d; render(); })
+    .catch(function(e){ alert(e.message); });
+};
+
+/* ---------------- 考试 ---------------- */
+window.__newExam = function(){ examModal(null); };
+window.__editE = function(id){ examModal(data.exams.find(function(e){ return e.id === id; })); };
+
+function examModal(e){
+  var isNew = !e;
+  e = e || { title:'', durationMinutes:10, shuffleQuestions:true, shuffleOptions:true, maxSwitch:0, endWhenAllSubmitted:false, questionIds: data.questions.map(function(q){ return q.id; }) };
+  var chosen = e.questionIds || [];
+  var list = data.questions.map(function(q){
+    var on = chosen.indexOf(q.id) >= 0;
+    return '<label><input type="checkbox" value="' + q.id + '"' + (on ? ' checked' : '') + '>' +
+      '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(q.text) + '</span>' +
+      '<span style="color:#8890ad;font-size:11px;white-space:nowrap">' + q.score + '分</span></label>';
+  }).join('');
+
+  openModal('<h3>' + (isNew ? '新建考试' : '编辑考试') + '</h3>' +
+    '<div class="row"><label>考试名称</label><input type="text" id="eTitle" value="' + esc(e.title) + '" placeholder="例如：期末复习测验"></div>' +
+    '<div class="grid2 row"><div><label>考试时长（分钟）</label><input type="number" id="eDuration" value="' + e.durationMinutes + '" min="1" max="600"></div>' +
+      '<div><label>切屏上限（0 = 只提示不处罚）</label><input type="number" id="eSwitch" value="' + e.maxSwitch + '" min="0" max="99"></div></div>' +
+    '<label class="checkline"><input type="checkbox" id="eShuffleQ"' + (e.shuffleQuestions ? ' checked' : '') + '> 题目乱序（每人顺序不同）</label>' +
+    '<label class="checkline"><input type="checkbox" id="eShuffleO"' + (e.shuffleOptions ? ' checked' : '') + '> 选项乱序（ABCD 顺序打乱）</label>' +
+    '<label class="checkline"><input type="checkbox" id="eAutoEnd"' + (e.endWhenAllSubmitted ? ' checked' : '') + '> 全部交卷后自动结束（约 15 秒后）</label>' +
+    '<div class="row" style="margin-top:14px"><label>选择题目（' + data.questions.length + ' 道）</label><div class="qpick" id="qpick">' + (list || '<div class="empty">题库为空</div>') + '</div></div>' +
+    '<p class="modal-err" id="eErr"></p>' +
+    '<div class="modal-foot"><button class="btn" onclick="window.__closeModal()">取消</button>' +
+    '<button class="btn primary" id="eSave">保存</button></div>');
+
+  $('eSave').addEventListener('click', function(){
+    var ids = [].slice.call(document.querySelectorAll('#qpick input:checked')).map(function(x){ return x.value; });
+    var body = {
+      id: e.id || undefined,
+      title: $('eTitle').value.trim(),
+      durationMinutes: Number($('eDuration').value),
+      maxSwitch: Number($('eSwitch').value),
+      shuffleQuestions: $('eShuffleQ').checked,
+      shuffleOptions: $('eShuffleO').checked,
+      endWhenAllSubmitted: $('eAutoEnd').checked,
+      questionIds: ids
+    };
+    if (!body.title){ $('eErr').textContent = '考试名称不能为空'; return; }
+    if (!ids.length){ $('eErr').textContent = '至少选择一道题'; return; }
+    post('/api/admin/exam', body).then(function(d){ data = d; closeModal(); render(); })
+      .catch(function(err){ $('eErr').textContent = err.message; });
+  });
+}
+
+window.__delE = function(id){
+  if (!confirm('确定删除这场考试？')) return;
+  api('/api/admin/exam?id=' + encodeURIComponent(id), { method:'DELETE' }).then(function(d){ data = d; render(); })
+    .catch(function(e){ alert(e.message); });
+};
+
+window.__act = function(action, id){
+  post('/api/admin/exam/' + action, { id: id }).then(function(d){
+    data = d;
+    if (action === 'start' || action === 'publish'){ tab = 'live'; document.querySelectorAll('nav button').forEach(function(x){ x.classList.toggle('active', x.getAttribute('data-tab') === 'live'); }); }
+    render();
+  }).catch(function(e){ alert(e.message); });
+};
+
+window.__gotoLive = function(){
+  tab = 'live';
+  document.querySelectorAll('nav button').forEach(function(x){ x.classList.toggle('active', x.getAttribute('data-tab') === 'live'); });
+  render();
+};
+window.__export = function(){ if (statsExamId) window.location = '/api/admin/export?id=' + encodeURIComponent(statsExamId); };
+window.__savePass = function(){
+  post('/api/admin/password', { oldPassword: $('oldPass').value, newPassword: $('newPass').value })
+    .then(function(){ $('passMsg').textContent = '密码已更新'; $('oldPass').value=''; $('newPass').value=''; })
+    .catch(function(e){ $('passMsg').textContent = e.message; $('passMsg').style.color = '#ff8585'; });
+};
+
+api('/api/admin/overview').then(function(d){ data = d; showApp(); render(); }).catch(function(){ showLogin(); });
+})();
+</script>
+</body>
+</html>
