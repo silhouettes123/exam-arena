@@ -283,7 +283,9 @@ function renderQuestions(){
 
   $('main').innerHTML =
     '<div class="page-head"><div><h2>题库</h2><p>共 ' + data.questions.length + ' 题，每题可单独设分值</p></div>' +
-      '<button class="btn primary" onclick="window.__newQ()">+ 新增题目</button></div>' +
+      '<div style="display:flex;gap:8px">' +
+      '<button class="btn" onclick="window.__importQ()">⇪ 导入题库</button>' +
+      '<button class="btn primary" onclick="window.__newQ()">+ 新增题目</button></div></div>' +
     '<div class="panel">' + (data.questions.length ?
       '<table><thead><tr><th>题干</th><th>分类</th><th class="num">分值</th><th class="num">答案</th><th></th></tr></thead><tbody>' + rows + '</tbody></table>'
       : '<div class="empty">题库还是空的</div>') + '</div>';
@@ -442,6 +444,139 @@ function openModal(html){
 }
 
 /* ---------------- 题目 ---------------- */
+/* ---------------- 导入题库 ---------------- */
+var importParsed = null;
+
+window.__importQ = function(){
+  importParsed = null;
+  openModal(
+    '<h3>一键导入题库</h3>' +
+    '<div class="row"><div style="display:flex;gap:8px">' +
+      '<button class="btn sm primary" id="impTabText">粘贴文本</button>' +
+      '<button class="btn sm" id="impTabFile">上传 Word / txt</button>' +
+    '</div></div>' +
+    '<div id="impPaneText" class="row">' +
+      '<label>把题目粘贴到这里（空行分隔每一题）</label>' +
+      '<textarea id="impText" style="min-height:190px" placeholder="1. 太阳系中体积最大的行星是？&#10;A. 地球&#10;B. 木星&#10;C. 土星&#10;D. 火星&#10;答案：B&#10;解析：木星最大"></textarea>' +
+      '<p style="font-size:12px;color:#8890ad;margin-top:6px;line-height:1.7">选项支持 A. / A、 / A），答案写「答案：B」，可选「解析：…」「（10分）」「【分类】」。整段写成一行也能识别。</p>' +
+    '</div>' +
+    '<div id="impPaneFile" class="row hidden">' +
+      '<label>选择 .docx 或 .txt 文件</label>' +
+      '<input type="file" id="impFile" accept=".docx,.txt">' +
+      '<p id="impFileName" style="font-size:12px;color:#8890ad;margin-top:6px"></p>' +
+    '</div>' +
+    '<div class="grid2 row"><div><label>默认分类</label><input type="text" id="impCat" value="导入题目"></div>' +
+      '<div><label>默认分值</label><input type="number" id="impScore" value="10" min="1" max="100"></div></div>' +
+    '<p class="modal-err" id="impErr"></p>' +
+    '<div id="impPreview"></div>' +
+    '<div class="modal-foot"><button class="btn" onclick="window.__closeModal()">取消</button>' +
+      '<button class="btn" id="impCheck">解析预览</button>' +
+      '<button class="btn primary" id="impCommit" disabled>确认导入</button></div>'
+  );
+
+  $('impTabText').addEventListener('click', function(){
+    $('impPaneText').classList.remove('hidden');
+    $('impPaneFile').classList.add('hidden');
+    $('impTabText').classList.add('primary');
+    $('impTabFile').classList.remove('primary');
+  });
+  $('impTabFile').addEventListener('click', function(){
+    $('impPaneFile').classList.remove('hidden');
+    $('impPaneText').classList.add('hidden');
+    $('impTabFile').classList.add('primary');
+    $('impTabText').classList.remove('primary');
+  });
+  $('impFile').addEventListener('change', function(){
+    var f = this.files[0];
+    $('impFileName').textContent = f ? ('已选择：' + f.name + '（' + Math.round(f.size / 1024) + ' KB）') : '';
+    $('impCommit').disabled = true;
+  });
+  $('impCheck').addEventListener('click', doImportPreview);
+  $('impCommit').addEventListener('click', doImportCommit);
+};
+
+function importPayload(){
+  var fileMode = !$('impPaneFile').classList.contains('hidden');
+  if (!fileMode) return Promise.resolve({ text: $('impText').value });
+
+  var f = $('impFile').files[0];
+  if (!f) return Promise.reject(new Error('请先选择文件'));
+  var isDocx = /\.docx$/i.test(f.name);
+  return new Promise(function(resolve, reject){
+    var r = new FileReader();
+    r.onload = function(){
+      var s = String(r.result || '');
+      if (isDocx) resolve({ docx: s.indexOf(',') >= 0 ? s.split(',')[1] : '' });
+      else resolve({ text: s });
+    };
+    r.onerror = function(){ reject(new Error('读取文件失败')); };
+    if (isDocx) r.readAsDataURL(f); else r.readAsText(f);
+  });
+}
+
+function doImportPreview(){
+  var err = $('impErr');
+  err.textContent = '';
+  $('impCheck').disabled = true;
+  var btnText = $('impCheck').textContent;
+  $('impCheck').textContent = '解析中…';
+
+  importPayload().then(function(payload){
+    payload.cat = $('impCat').value.trim() || '导入题目';
+    payload.score = Number($('impScore').value) || 10;
+    return post('/api/admin/import/preview', payload);
+  }).then(function(r){
+    importParsed = r.questions;
+    $('impCommit').disabled = !r.questions.length;
+    $('impCommit').textContent = '确认导入（' + r.questions.length + ' 题）';
+    $('impPreview').innerHTML = importPreviewHtml(r);
+  }).catch(function(e){
+    err.textContent = e.message;
+    $('impPreview').innerHTML = '';
+  }).then(function(){
+    $('impCheck').disabled = false;
+    $('impCheck').textContent = btnText;
+  });
+}
+
+function importPreviewHtml(r){
+  var head = '<div style="font-size:12px;color:#8890ad;margin:12px 0 8px">识别到 ' + r.total +
+    ' 段文字，成功解析 <b style="color:#8ff0b8">' + r.questions.length + '</b> 题</div>';
+  var warns = (r.warnings || []).length
+    ? '<div style="background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.35);border-radius:10px;padding:10px;margin-bottom:10px;font-size:12px;color:#ffd899;line-height:1.7">' +
+      r.warnings.map(esc).join('<br>') + '</div>'
+    : '';
+  var list = r.questions.slice(0, 10).map(function(q, i){
+    return '<div style="border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:10px;margin-bottom:8px;font-size:12.5px">' +
+      '<div style="margin-bottom:6px"><b>' + (i + 1) + '.</b> ' + esc(q.text) + '</div>' +
+      q.options.map(function(o, oi){
+        return '<div style="' + (oi === q.correct ? 'color:#8ff0b8' : 'color:#9aa3bf') + '">' +
+          'ABCD'[oi] + '. ' + esc(o) + (oi === q.correct ? ' ✓' : '') + '</div>';
+      }).join('') +
+      '<div style="color:#6f7a99;margin-top:5px">' + esc(q.cat) + ' · ' + q.score + ' 分</div></div>';
+  }).join('');
+  var more = r.questions.length > 10
+    ? '<div style="font-size:12px;color:#8890ad;margin-top:4px">… 还有 ' + (r.questions.length - 10) + ' 题未展示</div>'
+    : '';
+  return head + warns + list + more;
+}
+
+function doImportCommit(){
+  if (!importParsed || !importParsed.length) return;
+  $('impCommit').disabled = true;
+  post('/api/admin/import/commit', { questions: importParsed }).then(function(d){
+    data = d;
+    closeModal();
+    render();
+    setTimeout(function(){
+      alert('已导入 ' + d.added + ' 题' + (d.skipped ? '，跳过 ' + d.skipped + ' 题（重复或格式不符）' : ''));
+    }, 60);
+  }).catch(function(e){
+    $('impErr').textContent = e.message;
+    $('impCommit').disabled = false;
+  });
+}
+
 window.__newQ = function(){ questionModal(null); };
 window.__editQ = function(id){ questionModal(data.questions.find(function(q){ return q.id === id; })); };
 window.__closeModal = closeModal;

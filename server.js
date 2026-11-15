@@ -8,6 +8,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const { parseQuestions, docxToText } = require('./import-parser');
 
 const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, 'public');
@@ -364,7 +365,7 @@ function readBody(req, cb) {
   const chunks = [];
   req.on('data', c => {
     size += c.length;
-    if (size > 512 * 1024) { req.destroy(); return; }
+    if (size > 8 * 1024 * 1024) { req.destroy(); return; }
     chunks.push(c);
   });
   req.on('end', () => {
@@ -644,6 +645,56 @@ function handleAdminLogout(req, res) {
   send(res, 200, { ok: true }, { 'Set-Cookie': 'qadmin=; HttpOnly; Path=/; Max-Age=0' });
 }
 
+function handleImportPreview(req, res) {
+  if (!requireAdmin(req, res)) return;
+  readBody(req, body => {
+    if (!body) return send(res, 400, { error: '请求格式错误' });
+    let text = '';
+    try {
+      if (body.docx) text = docxToText(Buffer.from(String(body.docx), 'base64'));
+      else text = String(body.text || '');
+    } catch (e) {
+      return send(res, 400, { error: e.message });
+    }
+    if (!text.trim()) return send(res, 400, { error: '没有解析到文字内容' });
+    const result = parseQuestions(text, { cat: body.cat || '导入题目', score: int(body.score, 1, 100, 10) });
+    send(res, 200, {
+      questions: result.questions,
+      warnings: result.warnings,
+      total: result.total,
+      chars: text.length
+    });
+  });
+}
+
+function handleImportCommit(req, res) {
+  if (!requireAdmin(req, res)) return;
+  readBody(req, body => {
+    const list = Array.isArray(body && body.questions) ? body.questions : [];
+    if (!list.length) return send(res, 400, { error: '没有可导入的题目' });
+    let added = 0, skipped = 0;
+    const existing = new Set(db.questions.map(q => q.text.trim()));
+    for (const item of list) {
+      const text = String(item.text || '').trim().slice(0, 500);
+      const options = (Array.isArray(item.options) ? item.options : []).map(o => String(o || '').trim().slice(0, 200));
+      const correct = int(item.correct, 0, 3, -1);
+      if (!text || options.length !== 4 || options.some(o => !o) || correct < 0) { skipped++; continue; }
+      if (existing.has(text)) { skipped++; continue; }
+      db.questions.push({
+        id: rid('q_'),
+        cat: String(item.cat || '导入题目').trim().slice(0, 20) || '导入题目',
+        text, options, correct,
+        score: int(item.score, 1, 100, 10),
+        explain: String(item.explain || '').slice(0, 400),
+        createdAt: now()
+      });
+      existing.add(text);
+      added++;
+    }
+    saveDb();
+    send(res, 200, Object.assign(adminOverview(), { added, skipped }));
+  });
+}
 function handleQuestionSave(req, res) {
   if (!requireAdmin(req, res)) return;
   readBody(req, body => {
@@ -799,6 +850,8 @@ const server = http.createServer((req, res) => {
     if (m === 'POST' && p === '/api/admin/logout') return handleAdminLogout(req, res);
     if (m === 'GET' && p === '/api/admin/overview') return handleAdminOverview(req, res);
     if (m === 'POST' && p === '/api/admin/question') return handleQuestionSave(req, res);
+    if (m === 'POST' && p === '/api/admin/import/preview') return handleImportPreview(req, res);
+    if (m === 'POST' && p === '/api/admin/import/commit') return handleImportCommit(req, res);
     if (m === 'DELETE' && p === '/api/admin/question') return handleQuestionDelete(req, res, url);
     if (m === 'POST' && p === '/api/admin/exam') return handleExamSave(req, res);
     if (m === 'DELETE' && p === '/api/admin/exam') return handleExamDelete(req, res, url);
@@ -820,5 +873,6 @@ server.listen(PORT, '0.0.0.0', () => {
 });
 
 module.exports = { server };
+
 
 
