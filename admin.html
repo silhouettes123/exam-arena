@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
@@ -308,6 +308,7 @@ function renderExams(){
       btns += '<button class="btn sm bad" onclick="window.__delE(\'' + e.id + '\')">删除</button>';
     }
     var flags = [];
+    if (e.randomCount > 0) flags.push('随机抽 ' + e.randomCount + ' 题' + (e.randomCat ? '（' + e.randomCat + '）' : ''));
     if (e.shuffleQuestions) flags.push('题目乱序');
     if (e.shuffleOptions) flags.push('选项乱序');
     if (e.maxSwitch > 0) flags.push('切屏 ' + e.maxSwitch + ' 次交卷');
@@ -631,7 +632,7 @@ window.__editE = function(id){ examModal(data.exams.find(function(e){ return e.i
 
 function examModal(e){
   var isNew = !e;
-  e = e || { title:'', durationMinutes:10, shuffleQuestions:true, shuffleOptions:true, maxSwitch:0, endWhenAllSubmitted:false, questionIds: data.questions.map(function(q){ return q.id; }) };
+  e = e || { title:'', durationMinutes:10, shuffleQuestions:true, shuffleOptions:true, maxSwitch:0, endWhenAllSubmitted:false, randomCount:0, randomCat:'', questionIds: data.questions.map(function(q){ return q.id; }) };
   var chosen = e.questionIds || [];
   var list = data.questions.map(function(q){
     var on = chosen.indexOf(q.id) >= 0;
@@ -640,20 +641,65 @@ function examModal(e){
       '<span style="color:#8890ad;font-size:11px;white-space:nowrap">' + q.score + '分</span></label>';
   }).join('');
 
+  var cats = [];
+  data.questions.forEach(function(q){ if (q.cat && cats.indexOf(q.cat) < 0) cats.push(q.cat); });
+  var catOptions = '<option value="">全部分类</option>' + cats.map(function(c){
+    return '<option value="' + esc(c) + '"' + (e.randomCat === c ? ' selected' : '') + '>' + esc(c) + '</option>';
+  }).join('');
+
+  var randomMode = (e.randomCount || 0) > 0;
+
   openModal('<h3>' + (isNew ? '新建考试' : '编辑考试') + '</h3>' +
     '<div class="row"><label>考试名称</label><input type="text" id="eTitle" value="' + esc(e.title) + '" placeholder="例如：期末复习测验"></div>' +
     '<div class="grid2 row"><div><label>考试时长（分钟）</label><input type="number" id="eDuration" value="' + e.durationMinutes + '" min="1" max="600"></div>' +
       '<div><label>切屏上限（0 = 只提示不处罚）</label><input type="number" id="eSwitch" value="' + e.maxSwitch + '" min="0" max="99"></div></div>' +
+    '<div class="row"><label>出题方式</label>' +
+      '<div style="display:flex;gap:8px">' +
+        '<button class="btn sm' + (randomMode ? '' : ' primary') + '" id="modeManual">手动选题</button>' +
+        '<button class="btn sm' + (randomMode ? ' primary' : '') + '" id="modeRandom">随机抽题</button>' +
+      '</div></div>' +
+    '<div id="paneManual" class="row' + (randomMode ? ' hidden' : '') + '"><label>选择题目（' + data.questions.length + ' 道）</label>' +
+      '<div class="qpick" id="qpick">' + (list || '<div class="empty">题库为空</div>') + '</div></div>' +
+    '<div id="paneRandom" class="row' + (randomMode ? '' : ' hidden') + '">' +
+      '<div class="grid2"><div><label>抽取数量</label><input type="number" id="eCount" value="' + (e.randomCount || 5) + '" min="1" max="200"></div>' +
+      '<div><label>从哪个分类抽</label><select id="eCat" style="width:100%;padding:10px 12px;border-radius:10px;background:rgba(255,255,255,.05);border:1px solid var(--line);color:var(--text)">' + catOptions + '</select></div></div>' +
+      '<p style="font-size:12px;color:#8890ad;margin-top:8px;line-height:1.7">发布考试时从题库里随机抽 N 道，抽中即固定给全场使用；重置后重新发布会重新抽。</p>' +
+      '<p id="poolHint" style="font-size:12px;color:#5f6b8a;margin-top:4px"></p>' +
+    '</div>' +
     '<label class="checkline"><input type="checkbox" id="eShuffleQ"' + (e.shuffleQuestions ? ' checked' : '') + '> 题目乱序（每人顺序不同）</label>' +
     '<label class="checkline"><input type="checkbox" id="eShuffleO"' + (e.shuffleOptions ? ' checked' : '') + '> 选项乱序（ABCD 顺序打乱）</label>' +
     '<label class="checkline"><input type="checkbox" id="eAutoEnd"' + (e.endWhenAllSubmitted ? ' checked' : '') + '> 全部交卷后自动结束（约 15 秒后）</label>' +
-    '<div class="row" style="margin-top:14px"><label>选择题目（' + data.questions.length + ' 道）</label><div class="qpick" id="qpick">' + (list || '<div class="empty">题库为空</div>') + '</div></div>' +
     '<p class="modal-err" id="eErr"></p>' +
     '<div class="modal-foot"><button class="btn" onclick="window.__closeModal()">取消</button>' +
     '<button class="btn primary" id="eSave">保存</button></div>');
 
+  function setMode(random){
+    $('paneManual').classList.toggle('hidden', random);
+    $('paneRandom').classList.toggle('hidden', !random);
+    $('modeManual').classList.toggle('primary', !random);
+    $('modeRandom').classList.toggle('primary', random);
+    if (random) updatePool();
+  }
+
+  function poolSize(){
+    var cat = $('eCat').value;
+    return data.questions.filter(function(q){ return !cat || q.cat === cat; }).length;
+  }
+
+  function updatePool(){
+    var n = poolSize();
+    $('poolHint').textContent = '当前分类可抽 ' + n + ' 道';
+  }
+
+  $('modeManual').addEventListener('click', function(){ setMode(false); });
+  $('modeRandom').addEventListener('click', function(){ setMode(true); });
+  $('eCat').addEventListener('change', updatePool);
+  if (randomMode) updatePool();
+
   $('eSave').addEventListener('click', function(){
-    var ids = [].slice.call(document.querySelectorAll('#qpick input:checked')).map(function(x){ return x.value; });
+    var random = !$('paneRandom').classList.contains('hidden');
+    var ids = random ? [] : [].slice.call(document.querySelectorAll('#qpick input:checked')).map(function(x){ return x.value; });
+    var count = random ? Number($('eCount').value) : 0;
     var body = {
       id: e.id || undefined,
       title: $('eTitle').value.trim(),
@@ -662,10 +708,15 @@ function examModal(e){
       shuffleQuestions: $('eShuffleQ').checked,
       shuffleOptions: $('eShuffleO').checked,
       endWhenAllSubmitted: $('eAutoEnd').checked,
+      randomCount: random ? count : 0,
+      randomCat: random ? $('eCat').value : '',
       questionIds: ids
     };
     if (!body.title){ $('eErr').textContent = '考试名称不能为空'; return; }
-    if (!ids.length){ $('eErr').textContent = '至少选择一道题'; return; }
+    if (random){
+      if (!(count >= 1)){ $('eErr').textContent = '抽取数量至少 1 道'; return; }
+      if (count > poolSize()){ $('eErr').textContent = '这个分类只有 ' + poolSize() + ' 道题，抽不出 ' + count + ' 道'; return; }
+    } else if (!ids.length){ $('eErr').textContent = '至少选择一道题'; return; }
     post('/api/admin/exam', body).then(function(d){ data = d; closeModal(); render(); })
       .catch(function(err){ $('eErr').textContent = err.message; });
   });
@@ -702,3 +753,4 @@ api('/api/admin/overview').then(function(d){ data = d; showApp(); render(); }).c
 </script>
 </body>
 </html>
+

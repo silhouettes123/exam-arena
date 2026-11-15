@@ -74,6 +74,8 @@ function normalizeDb(raw) {
     shuffleOptions: !!e.shuffleOptions,
     maxSwitch: int(e.maxSwitch, 0, 99, 0),
     endWhenAllSubmitted: !!e.endWhenAllSubmitted,
+    randomCount: int(e.randomCount, 0, 200, 0),
+    randomCat: String(e.randomCat || '').slice(0, 20),
     status: e.status === 'ended' ? 'ended' : 'draft',
     createdAt: e.createdAt || now(),
     startedAt: e.startedAt || 0,
@@ -239,6 +241,11 @@ function broadcast(rt) {
 /* --------------------------- 状态机 --------------------------- */
 function publishExam(exam) {
   if (runtimeOf(exam.id)) throw new Error('这场考试已经发布过了');
+  if (exam.randomCount > 0) {
+    const pool = db.questions.filter(q => !exam.randomCat || q.cat === exam.randomCat);
+    if (!pool.length) throw new Error('没有符合条件可供抽题的题目');
+    exam.questionIds = shuffle(pool.map(q => q.id)).slice(0, Math.min(exam.randomCount, pool.length));
+  }
   exam.status = 'draft';
   exam.startedAt = 0;
   exam.endedAt = 0;
@@ -614,6 +621,8 @@ function adminOverview() {
       shuffleOptions: e.shuffleOptions,
       maxSwitch: e.maxSwitch,
       endWhenAllSubmitted: e.endWhenAllSubmitted,
+      randomCount: e.randomCount || 0,
+      randomCat: e.randomCat || '',
       createdAt: e.createdAt,
       results: e.results,
       questionStats: e.questionStats
@@ -744,8 +753,10 @@ function handleExamSave(req, res) {
   readBody(req, body => {
     const title = String((body && body.title) || '').trim().slice(0, 60);
     if (!title) return send(res, 400, { error: '考试名称不能为空' });
+    const randomCount = int(body.randomCount, 0, 200, 0);
+    const randomCat = String(body.randomCat || '').trim().slice(0, 20);
     const ids = (Array.isArray(body.questionIds) ? body.questionIds : []).filter(id => db.questions.some(q => q.id === id));
-    if (!ids.length) return send(res, 400, { error: '至少选择一道题' });
+    if (!randomCount && !ids.length) return send(res, 400, { error: '至少选择一道题，或设置随机抽取数量' });
 
     const data = {
       title, questionIds: ids,
@@ -753,7 +764,9 @@ function handleExamSave(req, res) {
       shuffleQuestions: !!body.shuffleQuestions,
       shuffleOptions: !!body.shuffleOptions,
       maxSwitch: int(body.maxSwitch, 0, 99, 0),
-      endWhenAllSubmitted: !!body.endWhenAllSubmitted
+      endWhenAllSubmitted: !!body.endWhenAllSubmitted,
+      randomCount,
+      randomCat
     };
 
     if (body.id) {
@@ -873,6 +886,8 @@ server.listen(PORT, '0.0.0.0', () => {
 });
 
 module.exports = { server };
+
+
 
 
 
