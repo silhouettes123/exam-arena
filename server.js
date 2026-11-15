@@ -403,7 +403,8 @@ function requireAdmin(req, res) {
 const MIME = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8', '.json': 'application/json; charset=utf-8',
-  '.png': 'image/png', '.svg': 'image/svg+xml', '.ico': 'image/x-icon'
+  '.png': 'image/png', '.svg': 'image/svg+xml', '.ico': 'image/x-icon',
+  '.txt': 'text/plain; charset=utf-8'
 };
 
 function serveStatic(res, pathname) {
@@ -414,7 +415,9 @@ function serveStatic(res, pathname) {
   let file = path.join(PUBLIC_DIR, safe);
   if (!file.startsWith(PUBLIC_DIR + path.sep) || !fs.existsSync(file)) {
     const flat = path.join(ROOT, safe);
-    file = ((safe === 'index.html' || safe === 'admin.html') && fs.existsSync(flat)) ? flat : '';
+    const ext = path.extname(flat).toLowerCase();
+    const FLAT_OK = { '.html': 1, '.txt': 1, '.ico': 1, '.png': 1, '.svg': 1, '.xml': 1 };
+    file = (FLAT_OK[ext] && safe.indexOf('..') < 0 && fs.existsSync(flat)) ? flat : '';
   }
   if (!file) { send(res, 404, '404 Not Found'); return; }
   fs.readFile(file, (err, data) => {
@@ -886,6 +889,8 @@ server.listen(PORT, '0.0.0.0', () => {
 });
 
 module.exports = { server };
+
+
 
 
 
